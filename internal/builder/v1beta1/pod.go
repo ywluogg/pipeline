@@ -31,6 +31,9 @@ type PodSpecOp func(*corev1.PodSpec)
 // PodStatusOp is an operation which modifies a PodStatus struct.
 type PodStatusOp func(status *corev1.PodStatus)
 
+// PodContainerStatusOp is an operation which modifies a ContainerStatus struct.
+type PodContainerStatusOp func(status *corev1.ContainerStatus)
+
 // Pod creates a Pod with default values.
 // Any number of Pod modifiers can be passed to transform it.
 func Pod(name string, ops ...PodOp) *corev1.Pod {

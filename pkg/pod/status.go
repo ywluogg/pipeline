@@ -108,7 +108,7 @@ func MakeTaskRunStatus(logger *zap.SugaredLogger, tr v1beta1.TaskRun, pod *corev
 	complete := areStepsComplete(pod) || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed
 
 	if complete {
-		updateCompletedTaskRun(trs, pod)
+		updateCompletedTaskRun(logger, trs, pod)
 	} else {
 		updateIncompleteTaskRun(trs, pod)
 	}
