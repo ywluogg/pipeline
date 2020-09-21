@@ -40,6 +40,7 @@ var (
 	terminationPath     = flag.String("termination_path", "/tekton/termination", "If specified, file to write upon termination")
 	results             = flag.String("results", "", "If specified, list of file names that might contain task results")
 	waitPollingInterval = time.Second
+	taskRunTimeout             = flag.String("taskrun_timeout", "", "If specified, sets timeout for taskRun")
 )
 
 func main() {

@@ -139,9 +139,11 @@ func (b *Builder) Build(ctx context.Context, taskRun *v1beta1.TaskRun, taskSpec 
 		return nil, err
 	}
 
+	extraEntrypointArgs := returnTimeoutArgs(taskSpec.Steps, taskRun.Spec.Timeout)
+
 	// Rewrite steps with entrypoint binary. Append the entrypoint init
 	// container to place the entrypoint binary.
-	entrypointInit, stepContainers, err := orderContainers(b.Images.EntrypointImage, credEntrypointArgs, stepContainers, taskSpec.Results)
+	entrypointInit, stepContainers, err := orderContainers(b.Images.EntrypointImage, credEntrypointArgs, extraEntrypointArgs, stepContainers, taskSpec.Results)
 	if err != nil {
 		return nil, err
 	}
@@ -397,4 +399,16 @@ func shouldAddReadyAnnotationOnPodCreate(ctx context.Context, sidecars []v1beta1
 	// controllers.
 	cfg := config.FromContextOrDefaults(ctx)
 	return !cfg.FeatureFlags.RunningInEnvWithInjectedSidecars
+}
+
+// returnTimeoutArgs returns a string array of timeout arguments for steps
+func returnTimeoutArgs(steps []v1beta1.Step, taskRunTimeout string) [][]string {
+	stepTimeouts := make([][]string, 1)
+	// for i, s := range steps {
+	// 	if s.Timeout != "" {
+	// 		stepTimeouts[i] = append(stepTimeouts[i], "-timeout", s.Timeout)
+	// 	}
+	// }
+	stepTimeouts[0] = append(stepTimeouts[0], "-taskrun_timeout", taskRunTimeout)
+	return stepTimeouts
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package entrypoint
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -63,6 +64,9 @@ type Entrypointer struct {
 
 	// Results is the set of files that might contain task results
 	Results []string
+
+	//Timeout is an optional user-specified flag for timing out Steps
+	TaskRunTimeout string
 }
 
 // Waiter encapsulates waiting for files to exist.
@@ -73,7 +77,7 @@ type Waiter interface {
 
 // Runner encapsulates running commands.
 type Runner interface {
-	Run(args ...string) error
+	Run(taskRunTimeout string, args ...string) error
 }
 
 // PostWriter encapsulates writing a file when complete.
@@ -108,6 +112,15 @@ func (e Entrypointer) Go() error {
 
 			return err
 		}
+	}
+
+	err := e.Runner.Run(e.TaskRunTimeout, e.Args...)
+	if err == context.DeadlineExceeded {
+		output = append(output, v1beta1.PipelineResourceResult{
+			Key:        "Reason",
+			Value:      "TimeoutExceeded",
+			ResultType: v1beta1.InternalTektonResultType,
+		})
 	}
 
 	if e.Entrypoint != "" {
