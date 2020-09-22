@@ -21,7 +21,7 @@ type realRunner struct {
 
 var _ entrypoint.Runner = (*realRunner)(nil)
 
-func (rr *realRunner) Run(timeout string, args ...string) error {
+func (rr *realRunner) Run(timeout string, taskRunDeadline string, args ...string) error {
 	if len(args) == 0 {
 		return nil
 	}
@@ -38,9 +38,15 @@ func (rr *realRunner) Run(timeout string, args ...string) error {
 	// Add timeout to context if a non-zero timeout is specified for a step
 	ctx := context.Background()
 	var cancel context.CancelFunc
+	deadline, _ := time.Parse(time.UnixDate, taskRunDeadline)
+	deadlineDuration := time.Until(deadline)
 	timeoutContext, _ := time.ParseDuration(timeout)
-	if timeoutContext != time.Duration(0) {
-		ctx, cancel = context.WithTimeout(ctx, timeoutContext)
+	timeoutDuration := timeoutContext
+	if timeoutDuration != time.Duration(0) && taskRunDeadline != "" && deadline.Before(time.Now().Add(timeoutDuration)) {
+		timeoutDuration = deadlineDuration
+	}
+	if timeoutDuration != time.Duration(0) {
+		ctx, cancel = context.WithTimeout(ctx, timeoutDuration)
 		defer cancel()
 	}
 

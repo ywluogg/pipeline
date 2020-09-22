@@ -41,6 +41,7 @@ var (
 	results             = flag.String("results", "", "If specified, list of file names that might contain task results")
 	waitPollingInterval = time.Second
 	timeout             = flag.String("timeout", "", "If specified, sets timeout for step")
+	taskRunDeadline      = flag.String("taskrun_deadline", "", "If specified, sets timeout for taskRun")
 )
 
 func main() {
@@ -75,6 +76,10 @@ func main() {
 
 	if timeout != nil {
 		e.Timeout = *timeout
+	}
+
+	if taskRunDeadline != nil {
+		e.TaskRunDeadline = *taskRunDeadline
 	}
 
 	// Copy any creds injected by the controller into the $HOME directory of the current

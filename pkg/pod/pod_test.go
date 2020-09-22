@@ -51,6 +51,7 @@ var (
 	featureInjectedSidecar                   = "running-in-environment-with-injected-sidecars"
 	featureFlagDisableHomeEnvKey             = "disable-home-env-overwrite"
 	featureFlagDisableWorkingDirKey          = "disable-working-directory-overwrite"
+	featureFlagDisableTaskRunStepTimeout     = "disable-taskrun-step-timeout-check"
 	featureFlagSetReadyAnnotationOnPodCreate = "enable-ready-annotation-on-pod-create"
 )
 

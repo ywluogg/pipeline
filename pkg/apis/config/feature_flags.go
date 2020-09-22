@@ -28,10 +28,12 @@ const (
 	disableHomeEnvOverwriteKey              = "disable-home-env-overwrite"
 	disableWorkingDirOverwriteKey           = "disable-working-directory-overwrite"
 	disableAffinityAssistantKey             = "disable-affinity-assistant"
+	DisableTaskRunStepTimeoutCheckKey       = "disable-taskrun-step-timeout-check"
 	runningInEnvWithInjectedSidecarsKey     = "running-in-environment-with-injected-sidecars"
 	DefaultDisableHomeEnvOverwrite          = false
 	DefaultDisableWorkingDirOverwrite       = false
 	DefaultDisableAffinityAssistant         = false
+	DefaultDisableTaskRunStepTimeoutCheck   = true
 	DefaultRunningInEnvWithInjectedSidecars = true
 )
 
@@ -41,6 +43,7 @@ type FeatureFlags struct {
 	DisableHomeEnvOverwrite          bool
 	DisableWorkingDirOverwrite       bool
 	DisableAffinityAssistant         bool
+	DisableTaskRunStepTimeoutCheck   bool
 	RunningInEnvWithInjectedSidecars bool
 }
 
@@ -76,6 +79,9 @@ func NewFeatureFlagsFromMap(cfgMap map[string]string) (*FeatureFlags, error) {
 		return nil, err
 	}
 	if err := setFeature(disableAffinityAssistantKey, DefaultDisableAffinityAssistant, &tc.DisableAffinityAssistant); err != nil {
+		return nil, err
+	}
+	if err := setFeature(DisableTaskRunStepTimeoutCheckKey, DefaultDisableTaskRunStepTimeoutCheck, &tc.DisableTaskRunStepTimeoutCheck); err != nil {
 		return nil, err
 	}
 	if err := setFeature(runningInEnvWithInjectedSidecarsKey, DefaultRunningInEnvWithInjectedSidecars, &tc.RunningInEnvWithInjectedSidecars); err != nil {

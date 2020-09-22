@@ -40,14 +40,23 @@ data:
   # See https://github.com/tektoncd/pipeline/issues/2013 for more
   # info.
   disable-home-env-overwrite: "false"
-  # Setting this flag to "true" will prevent Tekton overriding your
-  # Task container's working directory.
+  # Setting this flag to "false" will enforce TaskRun's timeout
+  # check to Step level enforcement.
   #
-  # The default behaviour currently is for Tekton to override the
-  # working directory if not set by the user but this will change
-  # in an upcoming release.
+  # The default behaviour currently is for the TaskRun's timeout
+  # check is done at TaskRun's reconciler level insteaf of at
+  # Step level.
   #
-  # See https://github.com/tektoncd/pipeline/issues/1836 for more
+  # See https://github.com/tektoncd/pipeline/issues/2559 for more
+  # info.
+  disable-taskrun-step-timeout-check: "true"
+  # Setting this flag to "true" will check Step's timeout against
+  # TaskRun's timeout.
+  #
+  # The default behaviour currently is to not check Step's timeout
+  # against TaskRun's timeout.
+  #
+  # See https://github.com/tektoncd/pipeline/issues/2559 for more
   # info.
   disable-working-directory-overwrite: "false"
   # This option should be set to false when Pipelines is running in a

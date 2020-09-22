@@ -97,20 +97,21 @@ func SidecarsReady(podStatus corev1.PodStatus) bool {
 }
 
 // MakeTaskRunStatus returns a TaskRunStatus based on the Pod's status.
-func MakeTaskRunStatus(logger *zap.SugaredLogger, tr v1beta1.TaskRun, pod *corev1.Pod, taskSpec v1beta1.TaskSpec) (v1beta1.TaskRunStatus, error) {
+func MakeTaskRunStatus(logger *zap.SugaredLogger, tr v1beta1.TaskRun, pod *corev1.Pod) (v1beta1.TaskRunStatus, error) {
 	trs := &tr.Status
 	if trs.GetCondition(apis.ConditionSucceeded) == nil || trs.GetCondition(apis.ConditionSucceeded).Status == corev1.ConditionUnknown {
 		// If the taskRunStatus doesn't exist yet, it's because we just started running
 		MarkStatusRunning(trs, v1beta1.TaskRunReasonRunning.String(), "Not all Steps in the Task have finished executing")
 	}
 
-	// Complete if we did not find a step that is not complete, or the pod is in a definitely complete phase
+	sortPodContainerStatuses(pod.Status.ContainerStatuses, pod.Spec.Containers)
+
 	complete := areStepsComplete(pod) || pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed
 
 	if complete {
-		updateCompletedTaskRun(logger, trs, pod)
+		updateCompletedTaskRunStatus(logger, trs, pod)
 	} else {
-		updateIncompleteTaskRun(trs, pod)
+		updateIncompleteTaskRunStatus(trs, pod)
 	}
 
 	trs.PodName = pod.Name
@@ -136,14 +137,10 @@ func MakeTaskRunStatus(logger *zap.SugaredLogger, tr v1beta1.TaskRun, pod *corev
 
 	trs.TaskRunResults = removeDuplicateResults(trs.TaskRunResults)
 
-	// Sort step states according to the order specified in the TaskRun spec's steps.
-	trs.Steps = sortTaskRunStepOrder(trs.Steps, taskSpec.Steps)
-
 	return *trs, merr.ErrorOrNil()
 }
 
 func setTaskRunStatusBasedOnStepStatus(logger *zap.SugaredLogger, stepStatuses []corev1.ContainerStatus, tr *v1beta1.TaskRun) *multierror.Error {
-
 	trs := &tr.Status
 	var merr *multierror.Error
 

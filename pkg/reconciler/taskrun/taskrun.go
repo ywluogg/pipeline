@@ -165,7 +165,7 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, tr *v1beta1.TaskRun) pkg
 
 	// Check if the TaskRun has timed out; if it is, this will set its status
 	// accordingly.
-	if tr.HasTimedOut() {
+	if tr.HasTimedOut() && !podconvert.ShouldCheckTaskRunStepTimeout(ctx) {
 		message := fmt.Sprintf("TaskRun %q failed to finish within %q", tr.Name, tr.GetTimeout())
 		err := c.failTaskRun(ctx, tr, v1beta1.TaskRunReasonTimedOut, message)
 		return c.finishReconcileUpdateEmitEvents(ctx, tr, before, err)
@@ -188,9 +188,7 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, tr *v1beta1.TaskRun) pkg
 	// Reconcile this copy of the task run and then write back any status
 	// updates regardless of whether the reconciliation errored out.
 	if err = c.reconcile(ctx, tr, taskSpec, rtr); err != nil {
-		if merr, ok := err.(*multierror.Error); ok {
-			logger.Errorf("Reconcile: %v", merr.Error())
-		}
+		logger.Errorf("Reconcile: %v", err.Error())
 	}
 
 	// Emit events (only when ConditionSucceeded was changed)
@@ -406,7 +404,7 @@ func (c *Reconciler) reconcile(ctx context.Context, tr *v1beta1.TaskRun,
 	}
 
 	// Convert the Pod's status to the equivalent TaskRun Status.
-	tr.Status, err = podconvert.MakeTaskRunStatus(logger, *tr, pod, *taskSpec)
+	tr.Status, err = podconvert.MakeTaskRunStatus(logger, *tr, pod)
 	if err != nil {
 		return err
 	}
@@ -631,6 +629,7 @@ func (c *Reconciler) createPod(ctx context.Context, tr *v1beta1.TaskRun, rtr *re
 	}
 
 	return c.KubeClientSet.CoreV1().Pods(tr.Namespace).Create(pod)
+
 }
 
 type DeletePod func(podName string, options *metav1.DeleteOptions) error

@@ -139,7 +139,16 @@ func (b *Builder) Build(ctx context.Context, taskRun *v1beta1.TaskRun, taskSpec 
 		return nil, err
 	}
 
+<<<<<<< HEAD
 	extraEntrypointArgs := returnTimeoutArgs(taskSpec.Steps)
+=======
+	taskRunDeadline := ""
+	if taskRun.Spec.Timeout != nil && ShouldCheckTaskRunStepTimeout(ctx) {
+		taskRunDeadline = time.Now().Add(taskRun.Spec.Timeout.Duration).Format(time.UnixDate)
+	}
+
+	extraEntrypointArgs := returnTimeoutArgs(taskSpec.Steps, taskRunDeadline)
+>>>>>>> df5a16d6 (Adding TaskRun timeout check to step level enforcement)
 
 	// Rewrite steps with entrypoint binary. Append the entrypoint init
 	// container to place the entrypoint binary.
@@ -401,6 +410,13 @@ func shouldAddReadyAnnotationOnPodCreate(ctx context.Context, sidecars []v1beta1
 	return !cfg.FeatureFlags.RunningInEnvWithInjectedSidecars
 }
 
+// ShouldCheckTaskRunStepTimeout returns a bool indicating whether to check
+// TaskRun's timeout on the Step level.
+func ShouldCheckTaskRunStepTimeout(ctx context.Context) bool {
+	cfg := config.FromContextOrDefaults(ctx)
+	return !cfg.FeatureFlags.DisableTaskRunStepTimeoutCheck
+}
+
 // returnTimeoutArgs returns a string array of timeout arguments for steps
 func returnTimeoutArgs(steps []v1beta1.Step) [][]string {
 	stepTimeouts := make([][]string, len(steps))
@@ -409,5 +425,6 @@ func returnTimeoutArgs(steps []v1beta1.Step) [][]string {
 			stepTimeouts[i] = append(stepTimeouts[i], "-timeout", s.Timeout)
 		}
 	}
+	
 	return stepTimeouts
 }
