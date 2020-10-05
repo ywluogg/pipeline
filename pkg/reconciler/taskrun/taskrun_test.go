@@ -311,9 +311,12 @@ func checkEvents(t *testing.T, fr *record.FakeRecorder, testName string, wantEve
 
 func checkCloudEvents(t *testing.T, fce *cloudevent.FakeClient, testName string, wantEvents []string) error {
 	t.Helper()
-	return eventFromChannel(fce.Events, testName, wantEvents)
+	return eventFromChannelUnordered(fce.Events, wantEvents)
 }
 
+// eventFromChannel takes a chan of string, a test name, and a list of events that a test
+// expects to receive. The events must be received in the same order they appear in the
+// wantEvents list. Any extra or too few received events are considered errors.
 func eventFromChannel(c chan string, testName string, wantEvents []string) error {
 	// We get events from a channel, so the timeout is here to avoid waiting
 	// on the channel forever if fewer than expected events are received.
@@ -348,6 +351,47 @@ func eventFromChannel(c chan string, testName string, wantEvents []string) error
 		}
 	}
 	return nil
+}
+
+// eventFromChannelUnordered takes a chan of string and a list of events that a test
+// expects to receive. The events can be received in any order. Any extra or too few
+// events are both considered errors.
+func eventFromChannelUnordered(c chan string, wantEvents []string) error {
+	timer := time.NewTimer(1 * time.Second)
+	expected := append([]string{}, wantEvents...)
+	// loop len(expected) + 1 times to catch extra erroneous events received that the test is not expecting
+	maxEvents := len(expected) + 1
+	for eventCount := 0; eventCount < maxEvents; eventCount++ {
+		select {
+		case event := <-c:
+			if len(expected) == 0 {
+				return fmt.Errorf("extra event received: %q", event)
+			}
+			found := false
+			for wantIdx, want := range expected {
+				matching, err := regexp.MatchString(want, event)
+				if err != nil {
+					return fmt.Errorf("something went wrong matching an event: %s", err)
+				}
+				if matching {
+					found = true
+					// Remove event from list of those we expect to receive
+					expected[wantIdx] = expected[len(expected)-1]
+					expected = expected[:len(expected)-1]
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("unexpected event received: %q", event)
+			}
+		case <-timer.C:
+			if len(expected) != 0 {
+				return fmt.Errorf("timed out waiting for %d more events: %#v", len(expected), expected)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("too many events received")
 }
 
 func TestReconcile_ExplicitDefaultSA(t *testing.T) {
@@ -3114,5 +3158,70 @@ func Test_storeTaskSpec(t *testing.T) {
 	}
 	if d := cmp.Diff(tr.Status.TaskSpec, want); d != "" {
 		t.Fatalf(diff.PrintWantGot(d))
+	}
+}
+
+func TestWillOverwritePodAffinity(t *testing.T) {
+	affinity := &corev1.Affinity{
+		PodAffinity: &corev1.PodAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
+				{
+					Namespaces: []string{"tekton-pipelines"},
+				},
+			},
+		},
+	}
+	affinityAssistantName := "pipeline.tekton.dev/affinity-assistant"
+
+	tcs := []struct {
+		name                string
+		hasTemplateAffinity bool
+		annotations         map[string]string
+		expected            bool
+	}{
+		{
+			name:     "no settings",
+			expected: false,
+		},
+		{
+			name: "no PodTemplate affinity set",
+			annotations: map[string]string{
+				affinityAssistantName: "affinity-assistant",
+			},
+			expected: false,
+		},
+		{
+			name:                "affinity assistant not set",
+			hasTemplateAffinity: true,
+			expected:            false,
+		},
+		{
+			name:                "PodTemplate affinity will be overwritten with affinity assistant",
+			hasTemplateAffinity: true,
+			annotations: map[string]string{
+				affinityAssistantName: "affinity-assistant",
+			},
+			expected: true,
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			tr := &v1beta1.TaskRun{
+				Spec: v1beta1.TaskRunSpec{
+					PodTemplate: &v1beta1.PodTemplate{},
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: tc.annotations,
+				},
+			}
+			if tc.hasTemplateAffinity {
+				tr.Spec.PodTemplate.Affinity = affinity
+			}
+
+			if got := willOverwritePodSetAffinity(tr); got != tc.expected {
+				t.Errorf("expected: %t got: %t", tc.expected, got)
+			}
+		})
 	}
 }

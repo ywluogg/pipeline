@@ -122,6 +122,7 @@ func (c *Reconciler) ReconcileKind(ctx context.Context, tr *v1beta1.TaskRun) pkg
 		c.timeoutHandler.Release(tr.GetNamespacedName())
 		pod, err := c.KubeClientSet.CoreV1().Pods(tr.Namespace).Get(tr.Status.PodName, metav1.GetOptions{})
 		if err == nil {
+			logger.Debugf("Stopping sidecars for TaskRun %q of Pod %q", tr.Name, tr.Status.PodName)
 			err = podconvert.StopSidecars(c.Images.NopImage, c.KubeClientSet, *pod)
 			if err == nil {
 				// Check if any SidecarStatuses are still shown as Running after stopping
@@ -504,7 +505,7 @@ func (c *Reconciler) handlePodCreationError(ctx context.Context, tr *v1beta1.Tas
 func (c *Reconciler) failTaskRun(ctx context.Context, tr *v1beta1.TaskRun, reason v1beta1.TaskRunReason, message string) error {
 	logger := logging.FromContext(ctx)
 
-	logger.Warn("stopping task run %q because of %q", tr.Name, reason)
+	logger.Warnf("stopping task run %q because of %q", tr.Name, reason)
 	tr.Status.MarkResourceFailed(reason, errors.New(message))
 
 	completionTime := metav1.Time{Time: time.Now()}
@@ -602,13 +603,16 @@ func (c *Reconciler) createPod(ctx context.Context, tr *v1beta1.TaskRun, rtr *re
 	ts = resources.ApplyResources(ts, inputResources, "inputs")
 	ts = resources.ApplyResources(ts, outputResources, "outputs")
 
+	// Get the randomized volume names assigned to workspace bindings
+	workspaceVolumes := workspace.CreateVolumes(tr.Spec.Workspaces)
+
 	// Apply workspace resource substitution
-	ts = resources.ApplyWorkspaces(ts, ts.Workspaces, tr.Spec.Workspaces)
+	ts = resources.ApplyWorkspaces(ts, ts.Workspaces, tr.Spec.Workspaces, workspaceVolumes)
 
 	// Apply task result substitution
 	ts = resources.ApplyTaskResults(ts)
 
-	ts, err = workspace.Apply(*ts, tr.Spec.Workspaces)
+	ts, err = workspace.Apply(*ts, tr.Spec.Workspaces, workspaceVolumes)
 	if err != nil {
 		logger.Errorf("Failed to create a pod for taskrun: %s due to workspace error %v", tr.Name, err)
 		return nil, err
@@ -631,8 +635,13 @@ func (c *Reconciler) createPod(ctx context.Context, tr *v1beta1.TaskRun, rtr *re
 		return nil, fmt.Errorf("translating TaskSpec to Pod: %w", err)
 	}
 
-	return c.KubeClientSet.CoreV1().Pods(tr.Namespace).Create(pod)
-
+	pod, err = c.KubeClientSet.CoreV1().Pods(tr.Namespace).Create(pod)
+	if err == nil && willOverwritePodSetAffinity(tr) {
+		if recorder := controller.GetEventRecorder(ctx); recorder != nil {
+			recorder.Eventf(tr, corev1.EventTypeWarning, "PodAffinityOverwrite", "Pod template affinity is overwritten by affinity assistant for pod %q", pod.Name)
+		}
+	}
+	return pod, err
 }
 
 type DeletePod func(podName string, options *metav1.DeleteOptions) error
@@ -732,4 +741,14 @@ func storeTaskSpec(ctx context.Context, tr *v1beta1.TaskRun, ts *v1beta1.TaskSpe
 		tr.Status.TaskSpec = ts
 	}
 	return nil
+}
+
+// willOverwritePodSetAffinity returns a bool indicating whether the
+// affinity for pods will be overwritten with affinity assistant.
+func willOverwritePodSetAffinity(taskRun *v1beta1.TaskRun) bool {
+	var podTemplate v1beta1.PodTemplate
+	if taskRun.Spec.PodTemplate != nil {
+		podTemplate = *taskRun.Spec.PodTemplate
+	}
+	return taskRun.Annotations[workspace.AnnotationAffinityAssistantName] != "" && podTemplate.Affinity != nil
 }
