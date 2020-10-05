@@ -22,4 +22,3 @@ data:
   disable-working-directory-overwrite: "false"
   disable-affinity-assistant: "false"
   running-in-environment-with-injected-sidecars: "true"
-  require-git-ssh-secret-known-hosts: "false"

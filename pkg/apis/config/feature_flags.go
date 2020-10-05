@@ -29,12 +29,10 @@ const (
 	disableWorkingDirOverwriteKey           = "disable-working-directory-overwrite"
 	disableAffinityAssistantKey             = "disable-affinity-assistant"
 	runningInEnvWithInjectedSidecarsKey     = "running-in-environment-with-injected-sidecars"
-	requireGitSSHSecretKnownHostsKey        = "require-git-ssh-secret-known-hosts" // nolint: gosec
 	DefaultDisableHomeEnvOverwrite          = false
 	DefaultDisableWorkingDirOverwrite       = false
 	DefaultDisableAffinityAssistant         = false
 	DefaultRunningInEnvWithInjectedSidecars = true
-	DefaultRequireGitSSHSecretKnownHosts    = false
 )
 
 // FeatureFlags holds the features configurations
@@ -44,7 +42,6 @@ type FeatureFlags struct {
 	DisableWorkingDirOverwrite       bool
 	DisableAffinityAssistant         bool
 	RunningInEnvWithInjectedSidecars bool
-	RequireGitSSHSecretKnownHosts    bool
 }
 
 // GetFeatureFlagsConfigName returns the name of the configmap containing all
@@ -82,9 +79,6 @@ func NewFeatureFlagsFromMap(cfgMap map[string]string) (*FeatureFlags, error) {
 		return nil, err
 	}
 	if err := setFeature(runningInEnvWithInjectedSidecarsKey, DefaultRunningInEnvWithInjectedSidecars, &tc.RunningInEnvWithInjectedSidecars); err != nil {
-		return nil, err
-	}
-	if err := setFeature(requireGitSSHSecretKnownHostsKey, DefaultRequireGitSSHSecretKnownHosts, &tc.RequireGitSSHSecretKnownHosts); err != nil {
 		return nil, err
 	}
 	return &tc, nil

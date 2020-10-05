@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/tektoncd/pipeline/pkg/apis/validate"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"knative.dev/pkg/apis"
 )
 
@@ -28,50 +29,64 @@ var _ apis.Validatable = (*PipelineRun)(nil)
 
 // Validate pipelinerun
 func (pr *PipelineRun) Validate(ctx context.Context) *apis.FieldError {
-	errs := validate.ObjectMetadata(pr.GetObjectMeta()).ViaField("metadata")
-	return errs.Also(pr.Spec.Validate(apis.WithinSpec(ctx)).ViaField("spec"))
+	if err := validate.ObjectMetadata(pr.GetObjectMeta()).ViaField("metadata"); err != nil {
+		return err
+	}
+	return pr.Spec.Validate(ctx)
 }
 
 // Validate pipelinerun spec
-func (ps *PipelineRunSpec) Validate(ctx context.Context) (errs *apis.FieldError) {
+func (ps *PipelineRunSpec) Validate(ctx context.Context) *apis.FieldError {
+	if equality.Semantic.DeepEqual(ps, &PipelineRunSpec{}) {
+		return apis.ErrMissingField("spec")
+	}
+
 	// can't have both pipelineRef and pipelineSpec at the same time
 	if (ps.PipelineRef != nil && ps.PipelineRef.Name != "") && ps.PipelineSpec != nil {
-		errs = errs.Also(apis.ErrDisallowedFields("pipelineref", "pipelinespec"))
+		return apis.ErrDisallowedFields("spec.pipelineref", "spec.pipelinespec")
 	}
 
 	// Check that one of PipelineRef and PipelineSpec is present
 	if (ps.PipelineRef == nil || (ps.PipelineRef != nil && ps.PipelineRef.Name == "")) && ps.PipelineSpec == nil {
-		errs = errs.Also(apis.ErrMissingField("pipelineref.name", "pipelinespec"))
+		return apis.ErrMissingField("spec.pipelineref.name", "spec.pipelinespec")
 	}
 
 	// Validate PipelineSpec if it's present
 	if ps.PipelineSpec != nil {
-		errs = errs.Also(ps.PipelineSpec.Validate(ctx).ViaField("pipelinespec"))
+		if err := ps.PipelineSpec.Validate(ctx); err != nil {
+			return err
+		}
 	}
 
 	if ps.Timeout != nil {
 		// timeout should be a valid duration of at least 0.
 		if ps.Timeout.Duration < 0 {
-			errs = errs.Also(apis.ErrInvalidValue(fmt.Sprintf("%s should be >= 0", ps.Timeout.Duration.String()), "timeout"))
+			return apis.ErrInvalidValue(fmt.Sprintf("%s should be >= 0", ps.Timeout.Duration.String()), "spec.timeout")
 		}
 	}
 
 	if ps.Status != "" {
 		if ps.Status != PipelineRunSpecStatusCancelled {
-			errs = errs.Also(apis.ErrInvalidValue(fmt.Sprintf("%s should be %s", ps.Status, PipelineRunSpecStatusCancelled), "status"))
+			return apis.ErrInvalidValue(fmt.Sprintf("%s should be %s", ps.Status, PipelineRunSpecStatusCancelled), "spec.status")
 		}
 	}
 
 	if ps.Workspaces != nil {
 		wsNames := make(map[string]int)
 		for idx, ws := range ps.Workspaces {
-			errs = errs.Also(ws.Validate(ctx).ViaFieldIndex("workspaces", idx))
+			field := fmt.Sprintf("spec.workspaces[%d]", idx)
+			if err := ws.Validate(ctx).ViaField(field); err != nil {
+				return err
+			}
 			if prevIdx, alreadyExists := wsNames[ws.Name]; alreadyExists {
-				errs = errs.Also(apis.ErrGeneric(fmt.Sprintf("workspace %q provided by pipelinerun more than once, at index %d and %d", ws.Name, prevIdx, idx), "name").ViaFieldIndex("workspaces", idx))
+				return &apis.FieldError{
+					Message: fmt.Sprintf("workspace %q provided by pipelinerun more than once, at index %d and %d", ws.Name, prevIdx, idx),
+					Paths:   []string{"spec.workspaces"},
+				}
 			}
 			wsNames[ws.Name] = idx
 		}
 	}
 
-	return errs
+	return nil
 }
