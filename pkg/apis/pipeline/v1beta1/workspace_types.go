@@ -36,9 +36,6 @@ type WorkspaceDeclaration struct {
 	// ReadOnly dictates whether a mounted volume is writable. By default this
 	// field is false and so mounted volumes are writable.
 	ReadOnly bool `json:"readOnly,omitempty"`
-	// Optional marks a Workspace as not being required in TaskRuns. By default
-	// this field is false and so declared workspaces are required.
-	Optional bool `json:"optional,omitempty"`
 }
 
 // GetMountPath returns the mountPath for w which is the MountPath if provided or the
@@ -94,9 +91,6 @@ type PipelineWorkspaceDeclaration struct {
 	// tasks are intended to have access to the data on the workspace.
 	// +optional
 	Description string `json:"description,omitempty"`
-	// Optional marks a Workspace as not being required in PipelineRuns. By default
-	// this field is false and so declared workspaces are required.
-	Optional bool `json:"optional,omitempty"`
 }
 
 // WorkspacePipelineTaskBinding describes how a workspace passed into the pipeline should be

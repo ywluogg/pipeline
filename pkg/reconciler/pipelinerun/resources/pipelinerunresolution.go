@@ -30,6 +30,7 @@ import (
 	"github.com/tektoncd/pipeline/pkg/contexts"
 	"github.com/tektoncd/pipeline/pkg/list"
 	"github.com/tektoncd/pipeline/pkg/names"
+	"github.com/tektoncd/pipeline/pkg/reconciler/pipeline/dag"
 	"github.com/tektoncd/pipeline/pkg/reconciler/taskrun/resources"
 )
 
@@ -133,15 +134,17 @@ func (t ResolvedPipelineRunTask) IsStarted() bool {
 	return true
 }
 
-func (t *ResolvedPipelineRunTask) checkParentsDone(facts *PipelineRunFacts) bool {
-	stateMap := facts.State.ToMap()
+func (t *ResolvedPipelineRunTask) checkParentsDone(state PipelineRunState, d *dag.Graph) bool {
+	stateMap := state.ToMap()
 	// check if parent tasks are done executing,
 	// if any of the parents is not yet scheduled or still running,
 	// wait for it to complete before evaluating when expressions
-	node := facts.TasksGraph.Nodes[t.PipelineTask.Name]
-	for _, p := range node.Prev {
-		if !stateMap[p.Task.HashKey()].IsDone() {
-			return false
+	node := d.Nodes[t.PipelineTask.Name]
+	if isTaskInGraph(t.PipelineTask.Name, d) {
+		for _, p := range node.Prev {
+			if !stateMap[p.Task.HashKey()].IsDone() {
+				return false
+			}
 		}
 	}
 	return true
@@ -153,12 +156,7 @@ func (t *ResolvedPipelineRunTask) checkParentsDone(facts *PipelineRunFacts) bool
 // (3) its parent task was skipped
 // (4) Pipeline is in stopping state (one of the PipelineTasks failed)
 // Note that this means Skip returns false if a conditionCheck is in progress
-func (t *ResolvedPipelineRunTask) Skip(facts *PipelineRunFacts) bool {
-	// finally tasks are never skipped. If this is a final task, return false
-	if facts.isFinalTask(t.PipelineTask.Name) {
-		return false
-	}
-
+func (t *ResolvedPipelineRunTask) Skip(state PipelineRunState, d *dag.Graph) bool {
 	// it already has TaskRun associated with it - PipelineTask not skipped
 	if t.IsStarted() {
 		return false
@@ -172,7 +170,7 @@ func (t *ResolvedPipelineRunTask) Skip(facts *PipelineRunFacts) bool {
 	}
 
 	// Check if the when expressions are false, based on the input's relationship to the values
-	if t.checkParentsDone(facts) {
+	if t.checkParentsDone(state, d) {
 		if len(t.PipelineTask.WhenExpressions) > 0 {
 			if !t.PipelineTask.WhenExpressions.HaveVariables() {
 				if !t.PipelineTask.WhenExpressions.AllowsExecution() {
@@ -183,17 +181,19 @@ func (t *ResolvedPipelineRunTask) Skip(facts *PipelineRunFacts) bool {
 	}
 
 	// Skip the PipelineTask if pipeline is in stopping state
-	if facts.IsStopping() {
+	if isTaskInGraph(t.PipelineTask.Name, d) && state.IsStopping(d) {
 		return true
 	}
 
-	stateMap := facts.State.ToMap()
+	stateMap := state.ToMap()
 	// Recursively look at parent tasks to see if they have been skipped,
 	// if any of the parents have been skipped, skip as well
-	node := facts.TasksGraph.Nodes[t.PipelineTask.Name]
-	for _, p := range node.Prev {
-		if stateMap[p.Task.HashKey()].Skip(facts) {
-			return true
+	node := d.Nodes[t.PipelineTask.Name]
+	if isTaskInGraph(t.PipelineTask.Name, d) {
+		for _, p := range node.Prev {
+			if stateMap[p.Task.HashKey()].Skip(state, d) {
+				return true
+			}
 		}
 	}
 	return false
@@ -255,11 +255,8 @@ func ValidateWorkspaceBindings(p *v1beta1.PipelineSpec, pr *v1beta1.PipelineRun)
 	}
 
 	for _, ws := range p.Workspaces {
-		if ws.Optional {
-			continue
-		}
 		if _, ok := pipelineRunWorkspaces[ws.Name]; !ok {
-			return fmt.Errorf("pipeline requires workspace with name %q be provided by pipelinerun", ws.Name)
+			return fmt.Errorf("pipeline expects workspace with name %q be provided by pipelinerun", ws.Name)
 		}
 	}
 	return nil
