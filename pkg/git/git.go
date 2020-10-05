@@ -21,7 +21,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -32,11 +31,6 @@ import (
 const (
 	sshKnownHostsUserPath          = ".ssh/known_hosts"
 	sshMissingKnownHostsSSHCommand = "ssh -o StrictHostKeyChecking=accept-new"
-)
-
-var (
-	// sshURLRegexFormat matches the url of SSH git repository
-	sshURLRegexFormat = regexp.MustCompile(`(ssh://[\w\d\.]+|.+@?.+\..+:)(:[\d]+){0,1}/*(.*)`)
 )
 
 func run(logger *zap.SugaredLogger, dir string, args ...string) (string, error) {
@@ -75,7 +69,6 @@ func Fetch(logger *zap.SugaredLogger, spec FetchSpec) error {
 	if err := ensureHomeEnv(logger); err != nil {
 		return err
 	}
-	validateGitAuth(logger, spec.URL)
 
 	if spec.Path != "" {
 		if _, err := run(logger, "", "init", spec.Path); err != nil {
@@ -250,26 +243,4 @@ func userHasKnownHostsFile(logger *zap.SugaredLogger) (bool, error) {
 	}
 	f.Close()
 	return true, nil
-}
-
-func validateGitAuth(logger *zap.SugaredLogger, url string) {
-	homeenv := os.Getenv("HOME")
-	sshCred := true
-	if _, err := os.Stat(homeenv + "/.ssh"); os.IsNotExist(err) {
-		sshCred = false
-	}
-	urlSSHFormat := ValidateGitSSHURLFormat(url)
-	if sshCred && !urlSSHFormat {
-		logger.Warnf("SSH credentials have been provided but the URL(%q) is not a valid SSH URL. This warning can be safely ignored if the URL is for a public repo or you are using basic auth", url)
-	} else if !sshCred && urlSSHFormat {
-		logger.Warnf("URL(%q) appears to need SSH authentication but no SSH credentials have been provided", url)
-	}
-}
-
-// ValidateGitSSHURLFormat validates the given URL format is SSH or not
-func ValidateGitSSHURLFormat(url string) bool {
-	if sshURLRegexFormat.MatchString(url) {
-		return true
-	}
-	return false
 }

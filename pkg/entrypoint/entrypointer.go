@@ -102,9 +102,8 @@ func (e Entrypointer) Go() error {
 			// *but* we write postfile to make next steps bail too.
 			e.WritePostFile(e.PostFile, err)
 			output = append(output, v1beta1.PipelineResourceResult{
-				Key:        "StartedAt",
-				Value:      time.Now().Format(timeFormat),
-				ResultType: v1beta1.InternalTektonResultType,
+				Key:   "StartedAt",
+				Value: time.Now().Format(timeFormat),
 			})
 
 			return err
@@ -115,9 +114,8 @@ func (e Entrypointer) Go() error {
 		e.Args = append([]string{e.Entrypoint}, e.Args...)
 	}
 	output = append(output, v1beta1.PipelineResourceResult{
-		Key:        "StartedAt",
-		Value:      time.Now().Format(timeFormat),
-		ResultType: v1beta1.InternalTektonResultType,
+		Key:   "StartedAt",
+		Value: time.Now().Format(timeFormat),
 	})
 
 	err := e.Runner.Run(e.Args...)

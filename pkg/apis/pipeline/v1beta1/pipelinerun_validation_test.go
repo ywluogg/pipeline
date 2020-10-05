@@ -36,15 +36,19 @@ func TestPipelineRun_Invalidate(t *testing.T) {
 		want *apis.FieldError
 	}{
 		{
+			name: "invalid pipelinerun",
+			pr: v1beta1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "prmetaname",
+				},
+			},
+			want: apis.ErrMissingField("spec"),
+		},
+		{
 			name: "invalid pipelinerun metadata",
 			pr: v1beta1.PipelineRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "pipelinerun.name",
-				},
-				Spec: v1beta1.PipelineRunSpec{
-					PipelineRef: &v1beta1.PipelineRef{
-						Name: "prname",
-					},
 				},
 			},
 			want: &apis.FieldError{
@@ -107,70 +111,34 @@ func TestPipelineRun_Validate(t *testing.T) {
 	tests := []struct {
 		name string
 		pr   v1beta1.PipelineRun
-	}{{
-		name: "normal case",
-		pr: v1beta1.PipelineRun{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "pipelinelineName",
+	}{
+		{
+			name: "normal case",
+			pr: v1beta1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "pipelinelineName",
+				},
+				Spec: v1beta1.PipelineRunSpec{
+					PipelineRef: &v1beta1.PipelineRef{
+						Name: "prname",
+					},
+				},
 			},
-			Spec: v1beta1.PipelineRunSpec{
-				PipelineRef: &v1beta1.PipelineRef{
-					Name: "prname",
+		}, {
+			name: "no timeout",
+			pr: v1beta1.PipelineRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "pipelinelineName",
+				},
+				Spec: v1beta1.PipelineRunSpec{
+					PipelineRef: &v1beta1.PipelineRef{
+						Name: "prname",
+					},
+					Timeout: &metav1.Duration{Duration: 0},
 				},
 			},
 		},
-	}, {
-		name: "no timeout",
-		pr: v1beta1.PipelineRun{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "pipelinelineName",
-			},
-			Spec: v1beta1.PipelineRunSpec{
-				PipelineRef: &v1beta1.PipelineRef{
-					Name: "prname",
-				},
-				Timeout: &metav1.Duration{Duration: 0},
-			},
-		},
-	}, {
-		name: "array param with pipelinespec and taskspec",
-		pr: v1beta1.PipelineRun{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "pipelinelineName",
-			},
-			Spec: v1beta1.PipelineRunSpec{
-				PipelineSpec: &v1beta1.PipelineSpec{
-					Params: []v1beta1.ParamSpec{{
-						Name: "pipeline-words",
-						Type: v1beta1.ParamTypeArray,
-					}},
-					Tasks: []v1beta1.PipelineTask{{
-						Name: "echoit",
-						Params: []v1beta1.Param{{
-							Name: "task-words",
-							Value: v1beta1.ArrayOrString{
-								ArrayVal: []string{"$(params.pipeline-words)"},
-							},
-						}},
-						TaskSpec: &v1beta1.EmbeddedTask{TaskSpec: &v1beta1.TaskSpec{
-							Params: []v1beta1.ParamSpec{{
-								Name: "task-words",
-								Type: v1beta1.ParamTypeArray,
-							}},
-							Steps: []v1beta1.Step{{
-								Container: corev1.Container{
-									Name:    "echo",
-									Image:   "ubuntu",
-									Command: []string{"echo"},
-									Args:    []string{"$(params.task-words[*])"},
-								},
-							}},
-						}},
-					}},
-				},
-			},
-		},
-	}}
+	}
 
 	for _, ts := range tests {
 		t.Run(ts.name, func(t *testing.T) {
@@ -187,11 +155,15 @@ func TestPipelineRunSpec_Invalidate(t *testing.T) {
 		spec    v1beta1.PipelineRunSpec
 		wantErr *apis.FieldError
 	}{{
+		name:    "Empty pipelineSpec",
+		spec:    v1beta1.PipelineRunSpec{},
+		wantErr: apis.ErrMissingField("spec"),
+	}, {
 		name: "pipelineRef without Pipeline Name",
 		spec: v1beta1.PipelineRunSpec{
 			PipelineRef: &v1beta1.PipelineRef{},
 		},
-		wantErr: apis.ErrMissingField("pipelineref.name", "pipelinespec"),
+		wantErr: apis.ErrMissingField("spec.pipelineref.name", "spec.pipelinespec"),
 	}, {
 		name: "pipelineRef and pipelineSpec together",
 		spec: v1beta1.PipelineRunSpec{
@@ -206,7 +178,7 @@ func TestPipelineRunSpec_Invalidate(t *testing.T) {
 					},
 				}}},
 		},
-		wantErr: apis.ErrDisallowedFields("pipelinespec", "pipelineref"),
+		wantErr: apis.ErrDisallowedFields("spec.pipelinespec", "spec.pipelineref"),
 	}, {
 		name: "workspaces may only appear once",
 		spec: v1beta1.PipelineRunSpec{
@@ -223,7 +195,7 @@ func TestPipelineRunSpec_Invalidate(t *testing.T) {
 		},
 		wantErr: &apis.FieldError{
 			Message: `workspace "ws" provided by pipelinerun more than once, at index 0 and 1`,
-			Paths:   []string{"workspaces[1].name"},
+			Paths:   []string{"spec.workspaces"},
 		},
 	}, {
 		name: "workspaces must contain a valid volume config",
@@ -238,11 +210,11 @@ func TestPipelineRunSpec_Invalidate(t *testing.T) {
 		wantErr: &apis.FieldError{
 			Message: "expected exactly one, got neither",
 			Paths: []string{
-				"workspaces[0].configmap",
-				"workspaces[0].emptydir",
-				"workspaces[0].persistentvolumeclaim",
-				"workspaces[0].secret",
-				"workspaces[0].volumeclaimtemplate",
+				"spec.workspaces[0].configmap",
+				"spec.workspaces[0].emptydir",
+				"spec.workspaces[0].persistentvolumeclaim",
+				"spec.workspaces[0].secret",
+				"spec.workspaces[0].volumeclaimtemplate",
 			},
 		},
 	}}

@@ -45,7 +45,6 @@ func TestNewFeatureFlagsFromConfigMap(t *testing.T) {
 				DisableWorkingDirOverwrite:       true,
 				DisableAffinityAssistant:         true,
 				RunningInEnvWithInjectedSidecars: false,
-				RequireGitSSHSecretKnownHosts:    true,
 			},
 			fileName: "feature-flags-all-flags-set",
 		},

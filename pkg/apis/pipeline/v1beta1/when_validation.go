@@ -33,15 +33,22 @@ var validWhenOperators = []string{
 }
 
 func (wes WhenExpressions) validate() *apis.FieldError {
-	errs := wes.validateWhenExpressionsFields().ViaField("when")
-	return errs.Also(wes.validateTaskResultsVariables().ViaField("when"))
+	if err := wes.validateWhenExpressionsFields(); err != nil {
+		return err
+	}
+	if err := wes.validateTaskResultsVariables(); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (wes WhenExpressions) validateWhenExpressionsFields() (errs *apis.FieldError) {
-	for idx, we := range wes {
-		errs = errs.Also(we.validateWhenExpressionFields().ViaIndex(idx))
+func (wes WhenExpressions) validateWhenExpressionsFields() *apis.FieldError {
+	for _, we := range wes {
+		if err := we.validateWhenExpressionFields(); err != nil {
+			return err
+		}
 	}
-	return errs
+	return nil
 }
 
 func (we *WhenExpression) validateWhenExpressionFields() *apis.FieldError {
@@ -50,16 +57,16 @@ func (we *WhenExpression) validateWhenExpressionFields() *apis.FieldError {
 	}
 	if !sets.NewString(validWhenOperators...).Has(string(we.Operator)) {
 		message := fmt.Sprintf("operator %q is not recognized. valid operators: %s", we.Operator, strings.Join(validWhenOperators, ","))
-		return apis.ErrInvalidValue(message, apis.CurrentField)
+		return apis.ErrInvalidValue(message, "spec.task.when")
 	}
 	if len(we.Values) == 0 {
-		return apis.ErrInvalidValue("expecting non-empty values field", apis.CurrentField)
+		return apis.ErrInvalidValue("expecting non-empty values field", "spec.task.when")
 	}
 	return nil
 }
 
 func (wes WhenExpressions) validateTaskResultsVariables() *apis.FieldError {
-	for idx, we := range wes {
+	for _, we := range wes {
 		expressions, ok := we.GetVarSubstitutionExpressions()
 		if ok {
 			if LooksLikeContainsResultRefs(expressions) {
@@ -67,7 +74,7 @@ func (wes WhenExpressions) validateTaskResultsVariables() *apis.FieldError {
 				resultRefs := NewResultRefs(expressions)
 				if len(expressions) != len(resultRefs) {
 					message := fmt.Sprintf("expected all of the expressions %v to be result expressions but only %v were", expressions, resultRefs)
-					return apis.ErrInvalidValue(message, apis.CurrentField).ViaIndex(idx)
+					return apis.ErrInvalidValue(message, "spec.tasks.when")
 				}
 			}
 		}
@@ -75,16 +82,25 @@ func (wes WhenExpressions) validateTaskResultsVariables() *apis.FieldError {
 	return nil
 }
 
-func (wes WhenExpressions) validatePipelineParametersVariables(prefix string, paramNames sets.String, arrayParamNames sets.String) (errs *apis.FieldError) {
-	for idx, we := range wes {
-		errs = errs.Also(validateStringVariable(we.Input, prefix, paramNames, arrayParamNames).ViaField("input").ViaFieldIndex("when", idx))
+func (wes WhenExpressions) validatePipelineParametersVariables(prefix string, paramNames sets.String, arrayParamNames sets.String) *apis.FieldError {
+	for _, we := range wes {
+		if err := validateStringVariable(fmt.Sprintf("input[%s]", we.Input), we.Input, prefix, paramNames, arrayParamNames); err != nil {
+			return err
+		}
 		for _, val := range we.Values {
-			errs = errs.Also(validateStringVariable(val, prefix, paramNames, arrayParamNames).ViaField("values").ViaFieldIndex("when", idx))
+			if err := validateStringVariable(fmt.Sprintf("values[%s]", val), val, prefix, paramNames, arrayParamNames); err != nil {
+				return err
+			}
 		}
 	}
-	return errs
+	return nil
 }
-func validateStringVariable(value, prefix string, stringVars sets.String, arrayVars sets.String) *apis.FieldError {
-	errs := substitution.ValidateVariableP(value, prefix, stringVars)
-	return errs.Also(substitution.ValidateVariableProhibitedP(value, prefix, arrayVars))
+func validateStringVariable(name, value, prefix string, stringVars sets.String, arrayVars sets.String) *apis.FieldError {
+	if err := substitution.ValidateVariable(name, value, prefix, "task when expression", "pipelinespec.when", stringVars); err != nil {
+		return err
+	}
+	if err := substitution.ValidateVariableProhibited(name, value, prefix, "task when expression", "pipelinespec.when", arrayVars); err != nil {
+		return err
+	}
+	return nil
 }

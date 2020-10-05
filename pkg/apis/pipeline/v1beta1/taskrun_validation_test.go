@@ -38,15 +38,12 @@ func TestTaskRun_Invalidate(t *testing.T) {
 	}{{
 		name: "invalid taskspec",
 		task: &v1beta1.TaskRun{},
-		want: apis.ErrMissingField("spec.taskref.name", "spec.taskspec"),
+		want: apis.ErrMissingField("spec"),
 	}, {
 		name: "invalid taskrun metadata",
 		task: &v1beta1.TaskRun{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "task.name",
-			},
-			Spec: v1beta1.TaskRunSpec{
-				TaskRef: &v1beta1.TaskRef{Name: "task"},
 			},
 		},
 		want: &apis.FieldError{
@@ -95,7 +92,7 @@ func TestTaskRun_Workspaces_Invalid(t *testing.T) {
 				}},
 			},
 		},
-		wantErr: apis.ErrMissingField("spec.workspaces[0].persistentvolumeclaim.claimname"),
+		wantErr: apis.ErrMissingField("workspace.persistentvolumeclaim.claimname"),
 	}, {
 		name: "bind same workspace twice",
 		tr: &v1beta1.TaskRun{
@@ -111,7 +108,7 @@ func TestTaskRun_Workspaces_Invalid(t *testing.T) {
 				}},
 			},
 		},
-		wantErr: apis.ErrMultipleOneOf("spec.workspaces[1].name"),
+		wantErr: apis.ErrMultipleOneOf("spec.workspaces.name"),
 	}}
 	for _, ts := range tests {
 		t.Run(ts.name, func(t *testing.T) {
@@ -134,13 +131,13 @@ func TestTaskRunSpec_Invalidate(t *testing.T) {
 	}{{
 		name:    "invalid taskspec",
 		spec:    v1beta1.TaskRunSpec{},
-		wantErr: apis.ErrMissingField("taskref.name", "taskspec"),
+		wantErr: apis.ErrMissingField("spec"),
 	}, {
 		name: "invalid taskref name",
 		spec: v1beta1.TaskRunSpec{
 			TaskRef: &v1beta1.TaskRef{},
 		},
-		wantErr: apis.ErrMissingField("taskref.name, taskspec"),
+		wantErr: apis.ErrMissingField("spec.taskref.name, spec.taskspec"),
 	}, {
 		name: "invalid taskref and taskspec together",
 		spec: v1beta1.TaskRunSpec{
@@ -154,7 +151,7 @@ func TestTaskRunSpec_Invalidate(t *testing.T) {
 				}}},
 			},
 		},
-		wantErr: apis.ErrDisallowedFields("taskspec", "taskref"),
+		wantErr: apis.ErrDisallowedFields("spec.taskspec", "spec.taskref"),
 	}, {
 		name: "negative pipeline timeout",
 		spec: v1beta1.TaskRunSpec{
@@ -163,7 +160,7 @@ func TestTaskRunSpec_Invalidate(t *testing.T) {
 			},
 			Timeout: &metav1.Duration{Duration: -48 * time.Hour},
 		},
-		wantErr: apis.ErrInvalidValue("-48h0m0s should be >= 0", "timeout"),
+		wantErr: apis.ErrInvalidValue("-48h0m0s should be >= 0", "spec.timeout"),
 	}, {
 		name: "wrong taskrun cancel",
 		spec: v1beta1.TaskRunSpec{
@@ -172,7 +169,7 @@ func TestTaskRunSpec_Invalidate(t *testing.T) {
 			},
 			Status: "TaskRunCancell",
 		},
-		wantErr: apis.ErrInvalidValue("TaskRunCancell should be TaskRunCancelled", "status"),
+		wantErr: apis.ErrInvalidValue("TaskRunCancell should be TaskRunCancelled", "spec.status"),
 	}, {
 		name: "invalid taskspec",
 		spec: v1beta1.TaskRunSpec{
@@ -185,22 +182,22 @@ func TestTaskRunSpec_Invalidate(t *testing.T) {
 		},
 		wantErr: &apis.FieldError{
 			Message: `invalid value "invalid-name-with-$weird-char/%"`,
-			Paths:   []string{"taskspec.steps[0].name"},
+			Paths:   []string{"taskspec.steps.name"},
 			Details: "Task step name must be a valid DNS Label, For more info refer to https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names",
 		},
 	}, {
 		name: "invalid params",
 		spec: v1beta1.TaskRunSpec{
 			Params: []v1beta1.Param{{
-				Name:  "myname",
+				Name:  "name",
 				Value: *v1beta1.NewArrayOrString("value"),
 			}, {
-				Name:  "myname",
+				Name:  "name",
 				Value: *v1beta1.NewArrayOrString("value"),
 			}},
 			TaskRef: &v1beta1.TaskRef{Name: "mytask"},
 		},
-		wantErr: apis.ErrMultipleOneOf("params[myname].name"),
+		wantErr: apis.ErrMultipleOneOf("spec.params.name"),
 	}}
 	for _, ts := range tests {
 		t.Run(ts.name, func(t *testing.T) {
